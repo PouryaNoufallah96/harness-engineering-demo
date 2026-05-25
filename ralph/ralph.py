@@ -89,6 +89,7 @@ def run_claude(spec: str) -> dict:
         input=spec,
         capture_output=True,
         text=True,
+        encoding="utf-8",  # spec/PROMPT.md contains non-cp1252 chars (e.g. →); force UTF-8 on Windows
         timeout=ITER_TIMEOUT,
         cwd=REPO_ROOT,
     )
