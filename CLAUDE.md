@@ -40,7 +40,7 @@ Schedulr is a B2B meeting-scheduling SaaS for sales teams. Stack: **Next.js 15 A
 | Backend lint | `uv run ruff check app` | `app/backend` |
 | Backend type check | `uv run mypy app` | `app/backend` |
 | Backend tests | `uv run pytest` | `app/backend` |
-| Frontend lint | `npm run lint` | `app/frontend` |
+| Frontend lint | _none configured — `next lint` prompts interactively (no ESLint in this brownfield app); use type check below_ | `app/frontend` |
 | Frontend type check | `npx tsc --noEmit` | `app/frontend` |
 | Frontend unit tests | `npm run test` | `app/frontend` |
 | Frontend build | `npm run build` | `app/frontend` |

@@ -21,8 +21,8 @@ what "building your own harness" actually looks like in production.
 | `CLAUDE.md` + `.claude/context/` | Rules + on-demand context derived from the real codebase (the "AI Layer") |
 | `.claude/commands/plan.md` | PIV step 1: analyze codebase + ticket, write `plans/<feature>-plan.md` |
 | `.claude/commands/implement.md` | PIV step 2: read plan, execute tasks, run per-task validation, write `reports/<feature>-implementation-report.md` |
-| `.claude/commands/validate.md` | PIV step 3: run the full gate (ruff + mypy + pytest + eslint + tsc) |
-| `.claude/hooks/post_tool_use_lint.py` | PostToolUse hook: runs ruff (Python) or eslint (TS) after every file edit |
+| `.claude/commands/validate.md` | PIV step 3: run the full gate (ruff + mypy + pytest + tsc + vitest) |
+| `.claude/hooks/post_tool_use_lint.py` | PostToolUse hook: runs ruff (Python) or `tsc --noEmit` typecheck (TS) after every file edit |
 | `.claude/hooks/stop_validate.py` | Stop hook: blocks Claude from stopping until ruff + pytest are green |
 | `.claude/settings.json` | Wires both hooks into Claude Code |
 | `ralph/ralph.sh` + `ralph/ralph.py` | The Ralph loop: strings headless Claude sessions together by re-feeding a spec each iteration |
@@ -85,8 +85,8 @@ Runs the full gate. Same commands the Stop hook enforces automatically:
 cd app/backend && uv run ruff check app
 cd app/backend && uv run mypy app
 cd app/backend && uv run pytest
-cd app/frontend && npm run lint
 cd app/frontend && npx tsc --noEmit
+cd app/frontend && npm run test
 ```
 
 ---
@@ -95,11 +95,11 @@ cd app/frontend && npx tsc --noEmit
 
 Hooks run automatically — no invocation needed.
 
-**PostToolUse (lint):** After every `Edit`/`Write`/`MultiEdit`, `.claude/hooks/post_tool_use_lint.py` runs:
+**PostToolUse (static check):** After every `Edit`/`Write`/`MultiEdit`, `.claude/hooks/post_tool_use_lint.py` runs:
 - Python files under `app/backend/` → `uv run ruff check <file>`
-- TS/TSX files under `app/frontend/` → `npm run lint`
+- TS/TSX files under `app/frontend/` → `npx tsc --noEmit` (typecheck — this brownfield app has no ESLint configured, and `next lint` would prompt interactively)
 
-Non-blocking (always exits 0) — surfaces lint warnings without stopping work.
+Non-blocking (always exits 0) — surfaces issues without stopping work. Binaries are resolved via `shutil.which` so it works under Windows cmd.exe too.
 
 **Stop (validate gate):** Before Claude ends its turn, `.claude/hooks/stop_validate.py` runs ruff + pytest. If either fails it prints a JSON block decision and Claude is asked to fix the issue. It checks `stop_hook_active` in the hook JSON to avoid infinite loops.
 

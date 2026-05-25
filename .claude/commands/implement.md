@@ -31,8 +31,8 @@ After all tasks complete, run the full gate from the plan's "Validation Gate" se
 cd app/backend && uv run ruff check app
 cd app/backend && uv run mypy app
 cd app/backend && uv run pytest
-cd app/frontend && npm run lint
 cd app/frontend && npx tsc --noEmit
+cd app/frontend && npm run test
 ```
 
 If any command fails: fix, re-run that command, then re-run the full gate. Do not declare done until every command is green.
@@ -63,8 +63,8 @@ Output to `reports/<feature-slug>-implementation-report.md`:
 | `uv run ruff check app` | PASS |
 | `uv run mypy app` | PASS |
 | `uv run pytest` | PASS (N tests) |
-| `npm run lint` | PASS |
 | `npx tsc --noEmit` | PASS |
+| `npm run test` (vitest) | PASS |
 
 ## Acceptance Criteria
 - [x] <criterion>

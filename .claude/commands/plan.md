@@ -72,8 +72,8 @@ Run these in order after all tasks are done:
 cd app/backend && uv run ruff check app
 cd app/backend && uv run mypy app
 cd app/backend && uv run pytest
-cd app/frontend && npm run lint
 cd app/frontend && npx tsc --noEmit
+cd app/frontend && npm run test
 \`\`\`
 
 ## Acceptance Criteria
