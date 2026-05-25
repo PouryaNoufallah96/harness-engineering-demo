@@ -36,9 +36,9 @@ Identify:
 - Auth path (new route → must use `auth_jwt.get_current_user`)
 - Test coverage gap (what's not tested that could regress)
 
-### 4. Write the plan
+### 4. Write the plan to a file
 
-Output to `plans/<feature-slug>-plan.md`. Use this structure:
+Use the **Write tool** to create the file `plans/<feature-slug>-plan.md` — this is a required deliverable, not optional. Do **NOT** just print the plan in your response; `/implement` reads it from disk, so the file must exist. Use this structure:
 
 ```markdown
 # Plan: <Feature Name>
