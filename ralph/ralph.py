@@ -26,6 +26,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -70,10 +71,16 @@ def git_commit(iteration: int) -> None:
 
 
 def run_claude(spec: str) -> dict:
-    """Invoke `claude -p` with spec on stdin; return parsed JSON output."""
+    """Invoke `claude -p` with spec on stdin; return parsed JSON output.
+
+    Resolve the binary via shutil.which so this works on Windows too, where the
+    Claude CLI is `claude.cmd` (an npm shim) and bare-name subprocess.run does
+    not resolve `.cmd` files.
+    """
+    claude_bin = shutil.which("claude") or "claude"
     result = subprocess.run(
         [
-            "claude",
+            claude_bin,
             "-p",
             "--output-format", "json",
             "--dangerously-skip-permissions",
