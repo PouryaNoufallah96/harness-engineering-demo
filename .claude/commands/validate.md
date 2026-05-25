@@ -15,8 +15,12 @@ cd app/backend && uv run mypy app
 cd app/backend && uv run pytest
 
 # Frontend
-cd app/frontend && npm run lint
+# NOTE: this brownfield app ships NO ESLint config, so `next lint` prompts
+# interactively (it would hang an automated gate). Static checking is done with
+# the TypeScript compiler; vitest covers unit tests. Wiring up ESLint is a
+# real follow-up the harness/workshop would flag.
 cd app/frontend && npx tsc --noEmit
+cd app/frontend && npm run test
 ```
 
 ---
@@ -35,8 +39,8 @@ Backend
   pytest             : PASS (N tests) / FAIL (N failed, N passed)
 
 Frontend
-  npm run lint       : PASS / FAIL
-  npx tsc --noEmit  : PASS / FAIL
+  tsc --noEmit       : PASS / FAIL
+  vitest (npm test)  : PASS / FAIL
 
 Overall: PASS / FAIL
 ```

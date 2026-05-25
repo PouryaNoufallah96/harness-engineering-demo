@@ -1,17 +1,31 @@
 #!/usr/bin/env python3
-"""Post-tool-use lint hook.
+"""Post-tool-use static-check hook.
 
-Reads the Claude Code hook JSON from stdin. When a Python file under app/backend
-or a TS/TSX file under app/frontend is written/edited, runs the appropriate linter
-and prints the result. Always exits 0 (non-blocking — surfaces lint, never stops work).
+Reads the Claude Code hook JSON from stdin. After a file edit/write:
+  - Python files under app/backend  -> ruff check (lint)
+  - TS/TSX files under app/frontend -> tsc --noEmit (typecheck; this brownfield
+    app ships no ESLint config, so `next lint` would prompt interactively)
+Prints the result and ALWAYS exits 0 (advisory — surfaces issues, never blocks).
+
+Binaries are resolved via shutil.which so it works under Windows cmd.exe too
+(npm/npx are .cmd shims that bare subprocess can't find without the extension).
 
 Wired to: PostToolUse / Edit|Write|MultiEdit
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+def _emit(result: subprocess.CompletedProcess, ok: str, bad: str) -> None:
+    if result.stdout.strip():
+        print(result.stdout)
+    if result.stderr.strip():
+        print(result.stderr, file=sys.stderr)
+    print(f"[lint-hook] {ok}" if result.returncode == 0 else f"[lint-hook] {bad}")
 
 
 def main() -> None:
@@ -22,61 +36,42 @@ def main() -> None:
         sys.exit(0)
 
     tool_input: dict = data.get("tool_input") or {}
-    file_path_raw: str | None = tool_input.get("file_path")
-
+    file_path_raw = tool_input.get("file_path")
     if not file_path_raw:
         sys.exit(0)
 
     file_path = Path(file_path_raw).resolve()
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")).resolve()
-
-    # Resolve paths relative to project root
     app_backend = project_dir / "app" / "backend"
     app_frontend = project_dir / "app" / "frontend"
 
     try:
-        rel = file_path.relative_to(project_dir)
+        rel_str = file_path.relative_to(project_dir).as_posix()
     except ValueError:
         sys.exit(0)
 
-    rel_str = rel.as_posix()
-
     if rel_str.startswith("app/backend/") and file_path.suffix == ".py":
+        uv_bin = shutil.which("uv") or "uv"
         print(f"[lint-hook] ruff check on {rel_str}")
         result = subprocess.run(
-            ["uv", "run", "ruff", "check", str(file_path)],
-            cwd=str(app_backend),
-            capture_output=True,
-            text=True,
+            [uv_bin, "run", "ruff", "check", str(file_path)],
+            cwd=str(app_backend), capture_output=True, text=True,
         )
-        if result.stdout.strip():
-            print(result.stdout)
-        if result.stderr.strip():
-            print(result.stderr, file=sys.stderr)
-        if result.returncode == 0:
-            print(f"[lint-hook] ruff: OK")
-        else:
-            print(f"[lint-hook] ruff: issues found (see above) — fix before committing")
+        _emit(result, ok="ruff: OK", bad="ruff: issues found (see above) — fix before committing")
 
     elif rel_str.startswith("app/frontend/") and file_path.suffix in (".ts", ".tsx"):
-        print(f"[lint-hook] eslint on {rel_str}")
+        npx_bin = shutil.which("npx")
+        if not npx_bin:
+            print("[lint-hook] npx not found on PATH; skipping frontend check")
+            sys.exit(0)
+        print(f"[lint-hook] tsc --noEmit (typecheck) triggered by {rel_str}")
         result = subprocess.run(
-            ["npm", "run", "lint"],
-            cwd=str(app_frontend),
-            capture_output=True,
-            text=True,
+            [npx_bin, "tsc", "--noEmit"],
+            cwd=str(app_frontend), capture_output=True, text=True,
         )
-        if result.stdout.strip():
-            print(result.stdout)
-        if result.stderr.strip():
-            print(result.stderr, file=sys.stderr)
-        if result.returncode == 0:
-            print(f"[lint-hook] eslint: OK")
-        else:
-            print(f"[lint-hook] eslint: issues found (see above) — fix before committing")
+        _emit(result, ok="tsc: OK", bad="tsc: type errors found (see above) — fix before committing")
 
-    # Always exit 0: lint hook is advisory, not blocking
-    sys.exit(0)
+    sys.exit(0)  # advisory hook — never blocks
 
 
 if __name__ == "__main__":
