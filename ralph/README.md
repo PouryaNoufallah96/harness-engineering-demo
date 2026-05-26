@@ -38,6 +38,45 @@ python ralph/ralph.py
 RALPH_MAX_ITER=10 RALPH_ITER_TIMEOUT=900 python ralph/ralph.py
 ```
 
+## Self-isolating worktree mode
+
+By default Ralph runs in place and commits onto your current branch, so you have to remember to sandbox it. Pass `--worktree` (or `RALPH_WORKTREE=1`) and Ralph creates its OWN git worktree on a fresh branch, runs the whole loop there, and commits to that branch. Your main working tree never moves.
+
+```bash
+# Ralph spins up its own worktree + branch, runs there, prints a review summary
+python ralph/ralph.py --worktree
+
+# name the branch, and remove the worktree on success (the branch is kept)
+python ralph/ralph.py --worktree --branch ralph/csv-export --cleanup
+```
+
+At the end it prints the branch, the worktree path, and the exact commands to review (`git diff main..<branch>`), merge, or discard the run.
+
+| Flag / env | Effect |
+|------------|--------|
+| `--worktree` / `RALPH_WORKTREE=1` | run inside a fresh worktree + branch |
+| `--branch <name>` / `RALPH_BRANCH` | branch name (default `ralph/run-<timestamp>`) |
+| `--cleanup` / `RALPH_CLEANUP=1` | remove the worktree on success (branch kept) |
+| `RALPH_WORKTREE_DIR` | where worktrees live (default `../ralph-worktrees`) |
+| `--db-isolate` / `RALPH_DB_ISOLATE=1` | give the run its own Postgres database |
+| `RALPH_CLAUDE_BIN` | override the `claude` binary (used by tests) |
+
+## Scaling to parallel agents
+
+The worktree is the unit you scale horizontally. Launch several `--worktree` runs at once and each is an isolated agent on its own branch and working copy, all sharing one `.git`:
+
+```bash
+python ralph/ralph.py --worktree --branch ralph/feature-a --db-isolate &
+python ralph/ralph.py --worktree --branch ralph/feature-b --db-isolate &
+python ralph/ralph.py --worktree --branch ralph/feature-c --db-isolate &
+wait
+# review each branch, then merge or open PRs
+```
+
+The one shared resource is the database. This app uses a single Postgres on host :5433, so parallel runs would otherwise stomp on each other's rows. `--db-isolate` solves it: per run it creates a uniquely named database (`schedulr_ralph_<branch>`) inside the same container, runs the migrations, and points that run's `DATABASE_URL` at it, so each agent's tests are isolated. (It needs the Postgres container up and `uv` available; if it can't create the database it logs a warning and falls back to the shared one.) Dependencies isolate on their own because `uv` venvs and `node_modules` live per worktree.
+
+This is the concrete version of the "every ticket goes in, a pull request comes out, run many in parallel across worktrees" operating model.
+
 ## Guardrails
 
 | Guardrail | Default | Purpose |

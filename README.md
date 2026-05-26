@@ -132,11 +132,18 @@ bash ralph/ralph.sh
 
 # Tune limits
 RALPH_MAX_ITER=10 RALPH_ITER_TIMEOUT=900 python ralph/ralph.py
+
+# Self-isolating: Ralph creates its OWN worktree + branch and runs there
+python ralph/ralph.py --worktree --branch ralph/csv-export --cleanup
+
+# Parallel agents: several isolated runs at once, each its own branch + database
+python ralph/ralph.py --worktree --branch ralph/feature-a --db-isolate &
+python ralph/ralph.py --worktree --branch ralph/feature-b --db-isolate &
 ```
 
-Ralph commits after each iteration so every step is reversible. See `ralph/README.md` for full documentation.
+Ralph commits after each iteration so every step is reversible. See `ralph/README.md` for full documentation, the worktree mode, and the parallel/DB-isolation pattern.
 
-**Important:** `--dangerously-skip-permissions` is used by Ralph to allow unattended file writes. Use Ralph only in a sandbox or dedicated worktree — never on your main branch.
+**Important:** `--dangerously-skip-permissions` is used by Ralph to allow unattended file writes. Run Ralph in a sandbox or dedicated worktree, never on your main branch. The `--worktree` flag gives you that isolation automatically.
 
 **Credit note (2026-06-15):** `claude -p` draws from a separate Agent SDK credit pool, not your interactive Claude Code subscription.
 
