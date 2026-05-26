@@ -132,10 +132,12 @@ def setup_isolated_db(work_root: Path, branch: str, env: dict) -> tuple[dict, st
     just create a uniquely named database inside it.
     """
     db_name = "schedulr_ralph_" + (re.sub(r"[^a-z0-9]+", "_", branch.lower()).strip("_") or "run")
-    compose = REPO_ROOT / "app" / "docker-compose.yml"
     docker = _bin("docker")
+    # Target the container by its explicit name (docker-compose.yml: container_name:
+    # schedulr-db). `docker compose exec` can fail to resolve the service when the
+    # container was started under a different compose project; `docker exec` does not.
     create = subprocess.run(
-        [docker, "compose", "-f", str(compose), "exec", "-T", "db",
+        [docker, "exec", "-i", "schedulr-db",
          "psql", "-U", "schedulr", "-d", "postgres", "-c", f'CREATE DATABASE "{db_name}"'],
         capture_output=True, text=True,
     )

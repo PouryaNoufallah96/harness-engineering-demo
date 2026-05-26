@@ -71,7 +71,7 @@ LOG_FILE="$WORK_ROOT/ralph/ralph.log"
 # --- optional per-run database isolation ---
 if [ -n "$WORKTREE" ] && [ -n "$DB_ISOLATE" ]; then
     DB_NAME="schedulr_ralph_$(echo "$BRANCH" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_' | sed 's/_*$//')"
-    if docker compose -f "$REPO_ROOT/app/docker-compose.yml" exec -T db \
+    if docker exec -i schedulr-db \
         psql -U schedulr -d postgres -c "CREATE DATABASE \"$DB_NAME\"" >>"$LOG_FILE" 2>&1; then
         export DATABASE_URL="postgresql+psycopg://schedulr:schedulr@localhost:5433/$DB_NAME"
         (cd "$WORK_ROOT/app/backend" && uv run alembic upgrade head) >>"$LOG_FILE" 2>&1 \
