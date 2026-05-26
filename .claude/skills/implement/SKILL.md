@@ -1,8 +1,14 @@
+---
+name: implement
+description: Read a plan file, execute every task in dependency order with per-task validation, then write an implementation report to reports/<feature-slug>-implementation-report.md.
+disable-model-invocation: true
+---
+
 # /implement — Execute a Feature Plan
 
 **Usage:** `/implement plans/<feature-slug>-plan.md`
 
-Reads the plan, executes every task in order, runs each task's validation command, then writes an implementation report.
+Reads the plan at `$ARGUMENTS`, executes every task in order, runs each task's validation command, then writes an implementation report.
 
 ---
 
@@ -10,7 +16,7 @@ Reads the plan, executes every task in order, runs each task's validation comman
 
 ### 1. Read the full plan
 
-Open `plans/<feature-slug>-plan.md`. Read it entirely before writing any code. Understand all tasks, their order, and the acceptance criteria.
+Open the plan file given in `$ARGUMENTS`. Read it entirely before writing any code. Understand all tasks, their order, and the acceptance criteria.
 
 Load any `.claude/context/` modules referenced in the plan's "Read before implementing" section.
 

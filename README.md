@@ -19,12 +19,17 @@ what "building your own harness" actually looks like in production.
 | Piece | What it shows |
 |-------|--------------|
 | `CLAUDE.md` + `.claude/context/` | Rules + on-demand context derived from the real codebase (the "AI Layer") |
-| `.claude/commands/plan.md` | PIV step 1: analyze codebase + ticket, write `plans/<feature>-plan.md` |
-| `.claude/commands/implement.md` | PIV step 2: read plan, execute tasks, run per-task validation, write `reports/<feature>-implementation-report.md` |
-| `.claude/commands/validate.md` | PIV step 3: run the full gate (ruff + mypy + pytest + tsc + vitest) |
+| `.claude/skills/plan/SKILL.md` | PIV step 1: analyze codebase + ticket, write `plans/<feature>-plan.md` |
+| `.claude/skills/implement/SKILL.md` | PIV step 2: read plan, execute tasks, run per-task validation, write `reports/<feature>-implementation-report.md` |
+| `.claude/skills/validate/SKILL.md` | PIV step 3: run the full gate (ruff + mypy + pytest + tsc + vitest) |
+| `.claude/skills/review/SKILL.md` | PIV step 4: delegate diff to the code-reviewer sub-agent, write `reports/<feature>-review.md` |
+| `.claude/agents/code-reviewer.md` | Sub-agent that reviews diffs against CLAUDE.md rules using codebase-search MCP tools |
 | `.claude/hooks/post_tool_use_lint.py` | PostToolUse hook: runs ruff (Python) or `tsc --noEmit` typecheck (TS) after every file edit |
 | `.claude/hooks/stop_validate.py` | Stop hook: blocks Claude from stopping until ruff + pytest are green |
 | `.claude/settings.json` | Wires both hooks into Claude Code |
+| `.mcp.json` | Registers the `codebase-search` MCP server (AST-based symbol navigation) |
+| `tooling/mcp/codebase_search.py` | FastMCP server exposing `where_is`, `find_references`, `outline` over the project's Python AST |
+| `tooling/pyproject.toml` | Isolated uv project declaring the `mcp` dependency for the tooling layer |
 | `ralph/ralph.sh` + `ralph/ralph.py` | The Ralph loop: strings headless Claude sessions together by re-feeding a spec each iteration |
 | `app/` | Schedulr brownfield app (FastAPI + Next.js) — what the harness operates on |
 
@@ -135,23 +140,32 @@ Ralph commits after each iteration so every step is reversible. See `ralph/READM
 ```
 harness-engineering-demo/
 ├── CLAUDE.md                      # Global rules (the AI Layer)
+├── .mcp.json                      # Registers codebase-search MCP server
 ├── .claude/
 │   ├── settings.json              # Hook wiring
-│   ├── commands/
-│   │   ├── plan.md                # /plan command
-│   │   ├── implement.md           # /implement command
-│   │   └── validate.md            # /validate command
+│   ├── agents/
+│   │   └── code-reviewer.md       # Sub-agent: reviews diffs against CLAUDE.md rules
+│   ├── skills/
+│   │   ├── plan/SKILL.md          # /plan skill (PIV step 1)
+│   │   ├── implement/SKILL.md     # /implement skill (PIV step 2)
+│   │   ├── validate/SKILL.md      # /validate skill (PIV step 3)
+│   │   └── review/SKILL.md        # /review skill (PIV step 4 — sub-agent delegation)
 │   ├── context/
 │   │   ├── architecture.md        # Module map + add-resource pattern
 │   │   ├── auth.md                # JWT vs legacy session
+│   │   ├── codebase-search.md     # MCP tool descriptions (where_is / find_references / outline)
 │   │   ├── export-pattern.md      # ExportService protocol + CSV escaping
 │   │   ├── testing.md             # pytest + vitest patterns
 │   │   └── timezones.md           # TimezoneAwareTime + UTC storage rules
 │   └── hooks/
 │       ├── post_tool_use_lint.py  # PostToolUse: lint on edit
 │       └── stop_validate.py       # Stop: validation gate
+├── tooling/
+│   ├── pyproject.toml             # Isolated uv project for tooling deps (mcp)
+│   └── mcp/
+│       └── codebase_search.py     # FastMCP AST server: where_is / find_references / outline
 ├── plans/                         # /plan outputs land here
-├── reports/                       # /implement outputs land here
+├── reports/                       # /implement + /review outputs land here
 ├── ralph/
 │   ├── PROMPT.md                  # Example spec (CSV export)
 │   ├── ralph.sh                   # Bash loop driver

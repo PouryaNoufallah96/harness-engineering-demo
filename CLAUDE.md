@@ -57,6 +57,7 @@ Load these modules only when the task touches the relevant area:
 |--------|-------------|
 | `.claude/context/architecture.md` | Adding a new resource, service, or route |
 | `.claude/context/auth.md` | Any authentication or authorization work |
+| `.claude/context/codebase-search.md` | Using the MCP tools to navigate by symbol |
 | `.claude/context/export-pattern.md` | Any export feature (CSV, PDF, XLSX, etc.) |
 | `.claude/context/testing.md` | Writing or modifying tests |
 | `.claude/context/timezones.md` | Any datetime display, serialization, or storage |
@@ -70,6 +71,18 @@ Load these modules only when the task touches the relevant area:
 - Alembic migrations must be reversible — every `upgrade()` must have a working `downgrade()`.
 - Escape user-supplied fields before writing them to any CSV cell (formula-injection risk — see export-pattern context).
 - New code follows the **forward** auth pattern (`auth_jwt.py`), not the legacy session token. Do not add new routes that depend on `auth_legacy.py`.
+
+---
+
+## Symbol Navigation
+
+Navigate by symbol using the `codebase-search` MCP server (`.mcp.json`) instead of grep. The three tools — `find_references`, `where_is`, `outline` — parse the Python AST and return only real definitions and call sites, with no false hits from comments or strings. Use them whenever you need to:
+
+- Verify a dependency is actually wired into a new route (`find_references("get_current_user")`)
+- Locate a function before reading its file (`where_is("list_meetings")`)
+- Check a service's public API before adding a method (`outline("export_service")`)
+
+See `.claude/context/codebase-search.md` for full tool descriptions.
 
 ---
 

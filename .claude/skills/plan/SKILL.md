@@ -1,3 +1,9 @@
+---
+name: plan
+description: Analyze a ticket or feature description, read the codebase, identify risks, and write a context-rich implementation plan to plans/<feature-slug>-plan.md. No code is written in this phase.
+disable-model-invocation: true
+---
+
 # /plan — Analyze + Plan a Feature
 
 **Usage:** `/plan <ticket-or-feature-description>`

@@ -1,3 +1,9 @@
+---
+name: validate
+description: Run the full quality gate (ruff + mypy + pytest + tsc + vitest) and report PASS/FAIL for each command. Run before any commit or PR.
+disable-model-invocation: true
+---
+
 # /validate — Full Validation Gate
 
 Run the complete quality gate and report PASS/FAIL for each command.
