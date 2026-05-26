@@ -67,7 +67,7 @@ Load these modules only when the task touches the relevant area:
 ## Hard Rules
 
 - Run the full validation gate (`/validate`) before opening a PR.
-- Never commit secrets, `.env` files, or JWT secrets to version control.
+- Never commit secrets, `.env` files, or JWT secrets to version control. A PreToolUse hook (`.claude/hooks/security_guard.py`) hard-blocks reading/editing any `.env` (use `.env.example`) and recursive directory deletes; do not try to work around it.
 - Alembic migrations must be reversible — every `upgrade()` must have a working `downgrade()`.
 - Escape user-supplied fields before writing them to any CSV cell (formula-injection risk — see export-pattern context).
 - New code follows the **forward** auth pattern (`auth_jwt.py`), not the legacy session token. Do not add new routes that depend on `auth_legacy.py`.

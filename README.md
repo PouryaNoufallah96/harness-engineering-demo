@@ -26,6 +26,7 @@ what "building your own harness" actually looks like in production.
 | `.claude/agents/code-reviewer.md` | Sub-agent that reviews diffs against CLAUDE.md rules using codebase-search MCP tools |
 | `.claude/hooks/post_tool_use_lint.py` | PostToolUse hook: runs ruff (Python) or `tsc --noEmit` typecheck (TS) after every file edit |
 | `.claude/hooks/stop_validate.py` | Stop hook: blocks Claude from stopping until ruff + pytest are green |
+| `.claude/hooks/security_guard.py` | PreToolUse hook: denies reading/editing/writing any real `.env` and recursive directory deletion (rm -rf, rmdir, find -delete, git clean -d) |
 | `.claude/settings.json` | Wires both hooks into Claude Code |
 | `.mcp.json` | Registers the `codebase-search` MCP server (AST-based symbol navigation) |
 | `tooling/mcp/codebase_search.py` | FastMCP server exposing `where_is`, `find_references`, `outline` over the project's Python AST |
@@ -108,6 +109,12 @@ Non-blocking (always exits 0) — surfaces issues without stopping work. Binarie
 
 **Stop (validate gate):** Before Claude ends its turn, `.claude/hooks/stop_validate.py` runs ruff + pytest. If either fails it prints a JSON block decision and Claude is asked to fix the issue. It checks `stop_hook_active` in the hook JSON to avoid infinite loops.
 
+**PreToolUse (security guard):** Before any tool runs, `.claude/hooks/security_guard.py` hard-denies two things:
+- Reading, editing, or writing a real `.env` file. It covers the Read/Edit/Write/MultiEdit/NotebookEdit tools, Bash commands (cat, grep, sed, awk, xxd, base64, `python -c`, `source`/`.`, `cp`, `find -exec cat`, obfuscated globs like `.e*` and `.??v`), and Glob/Grep file targeting. Template files (`.env.example`, `.sample`, `.template`, `.dist`, `.defaults`) stay allowed so config scaffolding still works.
+- Recursive directory deletion: `rm -r`/`-rf`/`-fr`/`-Rf`/`--recursive`, `rmdir`, `find -delete`, `find -exec rm`, and `git clean -d`. Single-file `rm` is still allowed.
+
+It returns a PreToolUse `permissionDecision: deny` with a reason (exit 0) so Claude gets the explanation and adapts, and fails open on malformed input so it can never brick a session. It still fires under `--dangerously-skip-permissions`, so it holds even during unattended Ralph runs.
+
 ---
 
 ## Ralph loop
@@ -159,7 +166,8 @@ harness-engineering-demo/
 │   │   └── timezones.md           # TimezoneAwareTime + UTC storage rules
 │   └── hooks/
 │       ├── post_tool_use_lint.py  # PostToolUse: lint on edit
-│       └── stop_validate.py       # Stop: validation gate
+│       ├── stop_validate.py       # Stop: validation gate
+│       └── security_guard.py      # PreToolUse: block .env access + recursive deletes
 ├── tooling/
 │   ├── pyproject.toml             # Isolated uv project for tooling deps (mcp)
 │   └── mcp/
