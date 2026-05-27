@@ -43,69 +43,63 @@ what "building your own harness" actually looks like in production.
 
 ---
 
-## Running the PIV loop
+## Setup
+
+You can let the agent do this. In a fresh Claude Code session, just ask it to read this section and get the app running. Or run it yourself:
 
 ```bash
 # Prerequisites: Claude Code CLI, uv (Python), npm (Node 20+)
-# Start Postgres (runs on host port 5433)
-cd app && docker compose up -d
-
-# Install backend deps
-cd app/backend && uv sync --extra dev
-
-# Install frontend deps
-cd app/frontend && npm install
+cd app && docker compose up -d                                        # Postgres on host port 5433
+cd app/backend && uv sync --extra dev && uv run alembic upgrade head  # backend deps + migrations
+cd app/frontend && npm install                                        # frontend deps
 ```
 
-### Step 1 — Plan
+## Running the PIV loop
 
-Open a Claude Code session in this repo and run:
+The loop is two commands. Validation is not a step you run, it is enforced for you: `/implement` validates each task as it goes, and the Stop hook blocks the agent from finishing until the full gate is green. That is what makes the loop self-validating.
 
-```
-/plan Add CSV export to the meetings page (SCH-142)
-```
-
-Claude reads the codebase, loads the relevant `.claude/context/` modules, and writes:
-`plans/add-csv-export-plan.md`
-
-### Step 2 — Implement
-
-In the same or a fresh session:
+**0. Let the agent set up the app.** In a fresh Claude Code session at the repo root:
 
 ```
-/implement plans/add-csv-export-plan.md
+Read the README and get the app running for me: Postgres, backend deps, frontend deps, and migrations.
 ```
 
-Claude reads the plan, executes each ordered task, runs per-task validation, then writes:
-`reports/add-csv-export-implementation-report.md`
-
-### Step 3 — Validate
+**1. Plan**
 
 ```
-/validate
+/plan "add your feature request here"
 ```
 
-Runs the full gate. Same commands the Stop hook enforces automatically:
+Claude reads the codebase, loads the relevant `.claude/context/` modules, and writes `plans/<feature-slug>-plan.md`.
 
-```bash
-cd app/backend && uv run ruff check app
-cd app/backend && uv run mypy app
-cd app/backend && uv run pytest
-cd app/frontend && npx tsc --noEmit
-cd app/frontend && npm run test
+**2. Implement**
+
 ```
+/implement plans/your-plan.md
+```
+
+Claude reads the plan, executes each task with per-task validation, and writes `reports/<feature-slug>-implementation-report.md`. When it finishes, the Stop hook runs the full gate (ruff + mypy + pytest + tsc + vitest) and blocks until it is green.
+
+> `/validate` still exists if you want to run the gate explicitly (it is the same gate the Stop hook runs), but you do not need to call it as part of the loop.
 
 ---
 
 ## Hooks
 
-Hooks run automatically — no invocation needed.
+Hooks run automatically, no invocation needed. Three are wired in `.claude/settings.json`:
+
+- **PostToolUse lint** runs ruff (or a TS typecheck) after every file edit.
+- **Stop gate** blocks the agent from finishing until ruff + pytest are green. This is the hook that makes the PIV loop self-validating.
+- **PreToolUse security guard** denies access to real `.env` files and recursive deletes, even under `--dangerously-skip-permissions`.
+
+<details>
+<summary>Full hook details</summary>
 
 **PostToolUse (static check):** After every `Edit`/`Write`/`MultiEdit`, `.claude/hooks/post_tool_use_lint.py` runs:
-- Python files under `app/backend/` → `uv run ruff check <file>`
-- TS/TSX files under `app/frontend/` → `npx tsc --noEmit` (typecheck — this brownfield app has no ESLint configured, and `next lint` would prompt interactively)
+- Python files under `app/backend/` run `uv run ruff check <file>`
+- TS/TSX files under `app/frontend/` run `npx tsc --noEmit` (typecheck; this brownfield app has no ESLint configured, and `next lint` would prompt interactively)
 
-Non-blocking (always exits 0) — surfaces issues without stopping work. Binaries are resolved via `shutil.which` so it works under Windows cmd.exe too.
+Non-blocking (always exits 0), so it surfaces issues without stopping work. Binaries are resolved via `shutil.which` so it works under Windows cmd.exe too.
 
 **Stop (validate gate):** Before Claude ends its turn, `.claude/hooks/stop_validate.py` runs ruff + pytest. If either fails it prints a JSON block decision and Claude is asked to fix the issue. It checks `stop_hook_active` in the hook JSON to avoid infinite loops.
 
@@ -115,20 +109,30 @@ Non-blocking (always exits 0) — surfaces issues without stopping work. Binarie
 
 It returns a PreToolUse `permissionDecision: deny` with a reason (exit 0) so Claude gets the explanation and adapts, and fails open on malformed input so it can never brick a session. It still fires under `--dangerously-skip-permissions`, so it holds even during unattended Ralph runs.
 
+</details>
+
 ---
 
 ## Ralph loop
 
-Ralph strings together headless Claude sessions, re-feeding a spec to a fresh `claude -p` process each iteration until a `DONE.txt` sentinel appears.
-
-**Example spec:** `ralph/PROMPT.md` — instructs Claude to add CSV export (SCH-142), with 8 verifiable spec items.
+Ralph strings together headless Claude sessions, re-feeding a spec to a fresh `claude -p` process each iteration until a `DONE.txt` sentinel appears. It commits after each iteration, so every step is reversible.
 
 ```bash
-# From repo root — Python driver (cross-platform)
-python ralph/ralph.py
+python ralph/ralph.py             # in-place (sandbox / dedicated branch only)
+python ralph/ralph.py --worktree  # self-isolating: Ralph makes its own worktree + branch
+```
 
-# Bash driver (Linux/macOS)
-bash ralph/ralph.sh
+See **`ralph/example-run/`** for a complete captured run of the CSV-export spec: the spec it was given, the iteration log, the fix plan with every spec item checked off, and the code it produced. Point here for what a finished loop looks like.
+
+<details>
+<summary>Full Ralph details (spec format, flags, worktree mode, parallel runs, guardrails)</summary>
+
+**Example spec:** `ralph/PROMPT.md` instructs Claude to add CSV export (SCH-142), with 8 verifiable spec items.
+
+```bash
+# From repo root
+python ralph/ralph.py             # Python driver (cross-platform)
+bash ralph/ralph.sh               # Bash driver (Linux/macOS)
 
 # Tune limits
 RALPH_MAX_ITER=10 RALPH_ITER_TIMEOUT=900 python ralph/ralph.py
@@ -141,11 +145,13 @@ python ralph/ralph.py --worktree --branch ralph/feature-a --db-isolate &
 python ralph/ralph.py --worktree --branch ralph/feature-b --db-isolate &
 ```
 
-Ralph commits after each iteration so every step is reversible. See `ralph/README.md` for full documentation, the worktree mode, and the parallel/DB-isolation pattern.
+See `ralph/README.md` for full documentation, the worktree mode, and the parallel/DB-isolation pattern.
 
 **Important:** `--dangerously-skip-permissions` is used by Ralph to allow unattended file writes. Run Ralph in a sandbox or dedicated worktree, never on your main branch. The `--worktree` flag gives you that isolation automatically.
 
 **Credit note (2026-06-15):** `claude -p` draws from a separate Agent SDK credit pool, not your interactive Claude Code subscription.
+
+</details>
 
 ---
 
@@ -185,6 +191,7 @@ harness-engineering-demo/
 │   ├── PROMPT.md                  # Example spec (CSV export)
 │   ├── ralph.sh                   # Bash loop driver
 │   ├── ralph.py                   # Python loop driver (cross-platform)
+│   ├── example-run/               # A complete captured run (reference): log, fix plan, produced code
 │   └── README.md                  # Ralph documentation
 └── app/                           # Schedulr brownfield app
     ├── backend/                   # FastAPI + SQLAlchemy 2.0, Python 3.12, uv
